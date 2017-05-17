@@ -41,7 +41,7 @@ class GameFrame extends JFrame {
     JTextArea textOut, textIn;  // read only
     JTextField toSend;
     JButton sendButton;
-    Color ocean;
+    Color gray, ocean;
     Border green, red;
     
     private int xCoord;
@@ -53,12 +53,13 @@ class GameFrame extends JFrame {
     public String addr;
     public InetAddress host;
     
-    Sender msgSender;
+    
     Receiver msgReceiver;
+    ObjectOutputStream outstr;
     
-    boolean connected = false;
+    //boolean connected = false;
     
-    public boolean done = false;
+    boolean done = false;
     
     short myRoll, theirRoll;
     boolean whosTurn = THEIRS;
@@ -70,10 +71,12 @@ class GameFrame extends JFrame {
         setSize(TOTAL_WIDTH, TOTAL_HEIGHT);
         setLayout(new BorderLayout());
         
+        gray = new Color(228,228,228);
         ocean = new Color(90,180,250);
-        green = BorderFactory.createLineBorder(Color.GREEN, 5);
-        red = BorderFactory.createLineBorder(Color.RED, 5);
-        fleet = new Ship[10];
+        green = BorderFactory.createLineBorder(Color.GREEN, 3);
+        red = BorderFactory.createLineBorder(Color.RED, 3);
+        
+        fleet = new Ship[11];
         
         // menus
         menuBar = new JMenuBar();
@@ -82,35 +85,28 @@ class GameFrame extends JFrame {
         gameMenu = new JMenu("Game");
         
         putShips = new JMenu("Place Ships");
-//            JMenuItem acc = new JMenuItem("Aircraft Carrier");
-//            JMenuItem bship = new JMenuItem("Battleship");
-//            JMenuItem dstr = new JMenuItem("Destroyer");
-//            JMenuItem sub = new JMenuItem("Submarine");
-//            JMenuItem pb = new JMenuItem("Patrol Boat");
-            
-//            putShips.add(acc);
-//            putShips.add(bship);
-//            putShips.add(dstr);
-//            putShips.add(sub);
-//            putShips.add(pb);
-//            putShips.addSeparator();
 
             putShips.add( new AbstractAction("All Randomly") {
                 public void actionPerformed(ActionEvent evt) {
-                    addAllShips();
-                    connectButton.setEnabled(true);
-                    //textOut.append("Ready\n");
+                    
+                    if(fleet[0] == null) {              // if ships not yet added
+                        addAllShips();
+                        textIn.append("   11 ships placed - ready\n");
+                        connectButton.setEnabled(true);
+                    }
+                    else textIn.append("   Ships already placed\n");
                 }
             });
             putShips.addSeparator();
             putShips.add( new AbstractAction("Clear All") {
                 public void actionPerformed(ActionEvent evt) {
                     clearShips();
+                    textIn.append("   Ships cleared - not ready\n");
                     connectButton.setEnabled(false);
-                    //textOut.append("Not ready\n");
                     
                 }
             });
+            
         rollDice = new JMenu("Roll");
         rollDice.setEnabled(false);
         
@@ -157,7 +153,7 @@ class GameFrame extends JFrame {
         
         // south panel for messaging
         messagePanel = new JPanel();
-        messagePanel.setBorder(BorderFactory.createLineBorder(Color.LIGHT_GRAY, 5));
+        messagePanel.setBorder(BorderFactory.createLineBorder(gray, 7));
         messagePanel.setLayout(new GridLayout(1,2));
         
         // 
@@ -172,14 +168,16 @@ class GameFrame extends JFrame {
         
           
         outPane = new JScrollPane(textOut);
-        outPane.setBorder(BorderFactory.createLineBorder(Color.LIGHT_GRAY, 3));
-        outPane.setViewportView(textOut);       // ?? does it work??
+        outPane.setBorder(BorderFactory.createLineBorder(gray, 5));
+        
+                    // check scrollpane behavior in client and server
+                    
         
         textIn = new JTextArea(6,30);
           textIn.setEditable(false);
           
         inPane = new JScrollPane(textIn);
-        inPane.setBorder(BorderFactory.createLineBorder(Color.LIGHT_GRAY, 3));
+        inPane.setBorder(BorderFactory.createLineBorder(gray, 5));
           
         toSend = new JTextField(35);
         
@@ -216,15 +214,10 @@ class GameFrame extends JFrame {
                         break;
                     case "Disconnect":
                         // close connection
-                        msgSender.msg = new Message("c", "quit");
-                        try { Thread.sleep(200); } catch(InterruptedException e) { }
-                        done = true;
-                        connected = false;
+                        try { 
+                            outstr.writeObject( new Message("q", "quit") );
+                        } catch(Exception e) { textIn.append(e.toString()); }
                         
-                        resetGame();
-                        
-                        try { Thread.sleep(750); } catch(InterruptedException e) { }
-                        done = false;   // reset for next connection
                         break;
                 }
             }
@@ -232,18 +225,19 @@ class GameFrame extends JFrame {
         
         sendButton.addActionListener(new ActionListener() {
             public void actionPerformed(ActionEvent evt) {
-                //try {
-                    // leave a new chat message for sender to send
-                    msgSender.msg = new Message("c", toSend.getText() + "\n");
-                    
+                try {
+                    outstr.writeObject( new Message("c", toSend.getText() + "\n") );
                     textOut.append("\"" + toSend.getText() + "\"\n");
-                //} catch(IOException exc) { textOut.append(exc.toString()); }
+                } 
+                catch(Exception exc) { textIn.append(exc.toString()); }
                 
-                toSend.setText("");
+                toSend.setText("");                 // clear text input area
             }
         });
     }
     
+    
+    // grid classes
     class GridPanel extends JPanel {        // in order to get coordinates from click
         int r, c;                           // each panel has a row & column #
         
@@ -305,7 +299,7 @@ class GameFrame extends JFrame {
         }
     }
     
-     // player 2 (attacking) grid  to keep track of shots fired
+     // player 2 (attacking) grid to keep track of shots fired
     class AGrid extends GameGrid implements MouseListener {
         
         AGrid(Color c) {
@@ -321,9 +315,13 @@ class GameFrame extends JFrame {
                 GridPanel temp = (GridPanel) evt.getComponent();
                 yCoord = temp.r;
                 xCoord = temp.c;
-
-                // leave a new shoot message for sender to send
-                msgSender.msg = new Message("s",yCoord, xCoord);
+                
+                // send shoot message
+                try {       
+                    outstr.writeObject( new Message("s",yCoord, xCoord) );
+                } 
+                catch(Exception exc) { textIn.append(exc.toString()); }
+                
                 // switch to other player's turn
                 whosTurn = THEIRS;
                 connPanel.setBorder(red);
@@ -362,80 +360,32 @@ class GameFrame extends JFrame {
 
             serve.addActionListener(new ActionListener() {
                 public void actionPerformed(ActionEvent evt) {
-                    try {
-                        setVisible(false);
-                        Server();
-                    } catch(UnknownHostException exc) { 
-                        status.setText("unknown host or invalid address\n");
-                    } 
-                    catch(IOException exc) { status.setText("I/O error\n"); }
-                    catch(Exception exc)   { exc.printStackTrace(); }
-                    
+                    setVisible(false);
+                    Server();
                 }
             });
 
             join.addActionListener(new ActionListener() {
                 public void actionPerformed(ActionEvent evt) {
                     //addr = address.getText();
-                    try {
-                        Client();
-                        
-                    } catch(UnknownHostException exc) { 
-                        status.setText("unknown host or invalid address\n");
-                    } catch(SocketException exc) { 
-                        status.setText("socket error - couldn't connect to server\n"); 
-                    }
-                    catch(IOException exc) { status.setText("I/O error\n"); }
-                    catch(Exception exc)   { exc.printStackTrace(); }
-                    
+                    Client();
                     setVisible(false);
                 }
             });
         }
     }
     
-     // Networking
-    class Sender implements Runnable {
-        Thread sndThr;
-        Socket socket;
-        ObjectOutputStream outstr;
-        Message msg;
-        
-        Sender(Socket s) {
-            socket = s;
-            sndThr = new Thread(this);
-            sndThr.start();
-        }
-        
-        public void run() {
-            try {
-                outstr = new ObjectOutputStream(socket.getOutputStream());
-                
-                while(!done) { 
-                    
-                    if(msg != null) {
-                        outstr.writeObject(msg);
-                        msg = null;
-                    }
-                    try { Thread.sleep(50);  } catch(InterruptedException e) {}
-                }
-                outstr.close();
-                
-             } catch(IOException exc) { textOut.append("i/o error\n"); }
-            catch(Exception exc) { textOut.append("something went wrong\n"); }
-        }
-    }
-    
+     // Networking (no sender thread, only receiver thread)
     class Receiver implements Runnable {
         Thread rcvThr;
         Socket socket;
         ObjectInputStream instr;
-        ObjectOutputStream outstr;
+        // ObjectOutputStream oustr previously declared
         
-        Receiver(Socket s, ObjectOutputStream oos) {
+        Receiver(Socket s) {
             socket = s;
-            outstr = oos;
             rcvThr = new Thread(this);
+            textIn.append("   creating comm thread\n");
             rcvThr.start();
         }
         
@@ -443,48 +393,58 @@ class GameFrame extends JFrame {
             Message msg;
             
             try {
+                outstr = new ObjectOutputStream(socket.getOutputStream());
                 instr = new ObjectInputStream(socket.getInputStream());
+                
+                textIn.append("   input and output streams created\n");
                 
                 while(!done) {
                     msg = (Message) instr.readObject();           // get message
                     switch(msg.type) {
                         // chat message
                         case "c":
-                            textIn.append( msg.str + "\n");
-                            if(msg.str.equals("quit")) done = true;
+                            textIn.append( msg.str );
                             break;
                             
                         // shoot message
                         case "s":
-                            int r = msg.r;
-                            int c = msg.c;
-                            shotResult = myShipHit(r,c);
-                            // leave new result message for sender to send
-                            msgSender.msg = new Message("r",shotResult);
-                            if(allSunk()) {
-                                // leave chat (win-lose) message for sender to send
-                                Thread.sleep(250);
-                                msgSender.msg = new Message("c", "You sunk all "
-                                        + "of my ships!\n");
-                            }
+                            shotResult = myShipHit(msg.r, msg.c);
+                            try {
+                                outstr.writeObject( new Message("r",shotResult) );
+                                
+                                if(allSunk()) 
+                                    outstr.writeObject( new Message("c", "You sunk all "
+                                        + "of my ships!\n") );
+                            } 
+                            catch(Exception exc) { textIn.append(exc.toString()); }
+                            
                             whosTurn = MINE;
                             connPanel.setBorder(green);
                             break;
                             
                         // result message
                         case "r":
-                            // mark attack square red if hit, ocean if miss
-                            if( msg.hom == HIT )
-                                attackPanel.grid[yCoord][xCoord].setBackground(Color.RED);
-                            else
-                                attackPanel.grid[yCoord][xCoord].setBackground(ocean);
+                            markShot( msg.hom );
+                            break;
+                        
+                        // quit message
+                        case "q":
+                            if(msg.str.equals("quit")) {
+                                textIn.append("   Opponent surrenders - game over\n");
+                                
+                                // acknowledge quit message with an OK
+                                try { 
+                                    outstr.writeObject( new Message("q", "okay") );
+                                } catch(Exception e) { textIn.append(e.toString()); }
+                            }
+                            done = true;
                             break;
                             
                         // dice roll message
                         case "d":
                             // have the player who rolls 2nd decide who goes first
                             theirRoll = msg.roll;
-                            textOut.append("Opponent rolled " + theirRoll + "\n");
+                            textIn.append("   Opponent rolled " + theirRoll + "\n");
                             
                             if(myRoll == 0)           // if I haven't rolled yet
                                 myRoll = rollD20();
@@ -492,75 +452,91 @@ class GameFrame extends JFrame {
                             break;
                     }
                 }
-                System.out.println("quitting receiver");
+                textIn.append("   stopping communication / closing socket\n");
                 
                 instr.close();
-                
-                Thread.sleep(1000);
+                outstr.close();
                 socket.close();
+                
+                textIn.append("   socket closed\n");
                 
             } catch(IOException exc) { 
                 System.out.println("i/o error - host disconnected"); 
             } catch(ClassNotFoundException exc) {
                 System.out.println("invalid object type");
-            } catch(InterruptedException exc) {
-                System.out.println("interrupted");
+            } 
+            finally {
+                resetGame();
             }
+            
         }
     }
     
-    public void Server() throws Exception {
+    public void Server() {
         ServerSocket server;
         Socket conn;
-        server = new ServerSocket(port);
-        System.out.println("created new server socket");
-        status.setText("Waiting for client to connect");
-        System.out.println("waiting for client to connect");
         
-        // prefer temp thread so gui doesn't hang
-            try {  
-                conn = server.accept();
-                connected = true;
-                putShips.setEnabled(false); 
-                sendButton.setEnabled(true);
-                rollDice.setEnabled(true);
+        try {
+            server = new ServerSocket(port);
+            
+            status.setText("Waiting for client to connect");
+            System.out.println("created new server socket");
+            
+            // would prefer temp thread so GUI doesn't hang while waiting for client
+            conn = server.accept();
+            
+            msgReceiver = new Receiver(conn);
+            textIn.append("   Server running\n");
                 
-                connectButton.setText("Disconnect");
-                host = conn.getInetAddress();
-                status.setText("Connected to: " + host.getHostAddress());
+            putShips.setEnabled(false); 
+            sendButton.setEnabled(true);
+            rollDice.setEnabled(true);
+            connectButton.setText("Disconnect");
+            
+            host = conn.getInetAddress();
+            status.setText("Connected to: " + host.getHostAddress());
 
-                msgSender = new Sender(conn);
-                msgReceiver = new Receiver(conn, msgSender.outstr);
-                textIn.append("Server running\n");
-                
-            }
-            catch(IOException exc) 
-            {   status.setText("Could not make a connection\n");   }
+        } catch (UnknownHostException exc) {
+            status.setText("unknown host or invalid address\n");
+        } catch (SocketException exc) {
+            status.setText("socket error - couldn't connect to server\n");
+        } catch (IOException exc) {
+            status.setText("I/O error\n");
+        } catch (Exception exc) {
+            exc.printStackTrace();
+        }
     }
     
-    public void Client() throws Exception {
+    public void Client() {
         Socket conn;
         
-        host = InetAddress.getLocalHost();
-        conn = new Socket(host, port);
-        
-        connected = true;
-        
-        putShips.setEnabled(false); 
-        sendButton.setEnabled(true);
-        rollDice.setEnabled(true);
-        
-        connectButton.setText("Disconnect");
-        status.setText("Connected to: " + host.getHostAddress());
-        
-        msgSender = new Sender(conn);
-        msgReceiver = new Receiver(conn, msgSender.outstr);
-        textIn.append("Client running\n");
-        
+        try {
+            host = InetAddress.getLocalHost();
+            conn = new Socket(host, port);
+            msgReceiver = new Receiver(conn);          // create receiver thread
+            
+            textIn.append("   Client running\n");
+            
+            putShips.setEnabled(false); 
+            sendButton.setEnabled(true);
+            rollDice.setEnabled(true);
+
+            connectButton.setText("Disconnect");
+            status.setText("Connected to: " + host.getHostAddress());
+            
+        } catch (UnknownHostException exc) {
+            status.setText("unknown host or invalid address\n");
+        } catch (SocketException exc) {
+            status.setText("socket error - couldn't connect to server\n");
+        } catch (IOException exc) {
+            status.setText("I/O error\n");
+        } catch (Exception exc) {
+            exc.printStackTrace();
+        }
     }
     
     
-    // ship methods
+     // ship methods
     private boolean validPlace(Ship s) {
         if(s.horiz && s.col <= (25 - s.size)) {
            for(int c=0; c<s.size; c++) 
@@ -588,12 +564,12 @@ class GameFrame extends JFrame {
         }           
     }
     
-    private Ship buildShip(String n) {
+    private Ship buildShip(String type) {
         short size;
         boolean horiz;
         int row, col;
         
-        switch(n) {
+        switch(type) {
             case "Aircraft Carrier":
                 size = 5; break;
             case "Battleship":
@@ -609,8 +585,9 @@ class GameFrame extends JFrame {
         row = (int) (Math.random() * 25);
         col = (int) (Math.random() * 25);
         
-        Ship s = new Ship(n, size, row, col, horiz);
-        while(!validPlace(s)) {
+        Ship s = new Ship(type, size, row, col, horiz);
+        
+        while(!validPlace(s)) {                             // find a valid spot
             row = (int) (Math.random() * 25);
             col = (int) (Math.random() * 25);
             s.row = row;
@@ -623,11 +600,12 @@ class GameFrame extends JFrame {
     private void addAllShips() {
         fleet[0] = buildShip("Aircraft Carrier");
         fleet[1] = buildShip("Battleship");
-        fleet[2] = buildShip("Destroyer");
+        fleet[2] = buildShip("Battleship");
         fleet[3] = buildShip("Destroyer");
-        fleet[4] = buildShip("Submarine");
+        fleet[4] = buildShip("Destroyer");
         fleet[5] = buildShip("Submarine");
-        for(int i=6; i<10; i++)
+        fleet[6] = buildShip("Submarine");
+        for(int i=7; i<11; i++)
             fleet[i] = buildShip("Patrol Boat");
     }
     
@@ -654,18 +632,40 @@ class GameFrame extends JFrame {
             return true;
         }
         else if(defendPanel.grid[r][c].getBackground().equals(Color.RED)) {
-            msgSender.msg = new Message("c", "You already hit there!");
+            // redundant hit!
+            try {
+                outstr.writeObject( new Message("c", "You already hit there!\n") );
+            } 
+            catch (IOException exc) {  textIn.append(exc.toString());  }
         }
         return false;
     }
     
     private boolean allSunk()
-    {   return hitCount == 29;  }
+    {   return hitCount == 33;  }
     
+    private void markShot(boolean hitormiss) {
+        // mark attack square red if hit, ocean if miss
+        if (hitormiss) {
+            attackPanel.grid[yCoord][xCoord].setBackground(Color.RED);
+            textIn.append("HIT\n");
+        } else {
+            attackPanel.grid[yCoord][xCoord].setBackground(ocean);
+            textIn.append("MISS\n");
+        }
+    }
+    
+    
+     // methods to decide starting player
     private short rollD20() {                               // roll 20-sided die
         short r = (short) ( Math.random() * 20 + 1);
-        textOut.append("You rolled " + r + "\n");
-        msgSender.msg = new Message("d", r);
+        textIn.append("   You rolled " + r + "\n");
+        
+        try {   // send # so other player knows what I rolled
+            outstr.writeObject( new Message("d", r) );
+        } 
+        catch (Exception exc) {  textIn.append(exc.toString());  }
+        
         return r;
     }
     
@@ -674,36 +674,49 @@ class GameFrame extends JFrame {
             whosTurn = MINE;
             rollDice.setEnabled(false);         // disable dice rolling
             connPanel.setBorder(green);
-            textOut.append("You go first\n");
+            textIn.append("   You go first\n");
         } else if (myroll < theirs) {
-            //whosTurn = THEIRS;
+            // whosTurn = THEIRS;
             rollDice.setEnabled(false);
-            textOut.append("They go first\n");
+            textIn.append("   They go first\n");
         } else {                                // reset results - roll again
             myRoll = 0;
             theirRoll = 0;
+            textIn.append("   Roll again\n");
         }
     }
     
+     // after game is over
     private void resetGame() {
         sendButton.setEnabled(false);
-        putShips.setEnabled(true);
-        rollDice.setEnabled(false);
+        connectButton.setEnabled(false);
         connectButton.setText("Connect...");
         status.setText("Disconnected");
+        rollDice.setEnabled(false);
+        putShips.setEnabled(true);
         connPanel.setBorder(red);
         whosTurn = THEIRS;
-                        
+        myRoll = 0; theirRoll = 0;
+        
+        // clear hits/misses
         for(int i=0; i<25; i++) {
             for(int j=0; j<25; j++) {
                 attackPanel.grid[i][j].setBackground(Color.DARK_GRAY);
             }
         }
         
+        clearShips();
+        
+        try { Thread.sleep(200); } 
+        catch(InterruptedException e) 
+            { System.out.println("interrupted"); }
+        
+        done = false;   // reset for next connection
     }
     
 }
 
+ // other classes
 class Ship {
     String type;        // e.g. submarine
     short size;         // length of ship
@@ -722,8 +735,8 @@ class Message implements Serializable {
     int r,c;
     boolean hom;
     
-    Message(String t, String s) {
-        type = t;
+    Message(String t, String s) {               // several constructors for 
+        type = t;                               // different kinds of messages
         str = s;
     }
     Message(String t, int y, int x) {
@@ -748,11 +761,9 @@ public class BattleshipGame {
         EventQueue.invokeLater( new Runnable() {
             public void run() {
                 GameFrame frame = new GameFrame();
-                frame.setDefaultCloseOperation(JFrame.HIDE_ON_CLOSE);
+                frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
                 frame.setVisible(true);
             }
         });
-        
     }
-    
 }
