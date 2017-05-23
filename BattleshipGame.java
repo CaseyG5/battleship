@@ -14,8 +14,6 @@ class GameFrame extends JFrame {
     
     public static final boolean MINE = true;
     public static final boolean THEIRS = false;
-    public static final boolean HIT = true;
-    public static final boolean MISS = false;
     
     JMenuBar menuBar;
     JMenu gameMenu;
@@ -23,48 +21,45 @@ class GameFrame extends JFrame {
     JMenu rollDice;
     
     JPanel gamePanel;
-    DGrid defendPanel; 
-    AGrid attackPanel;
+    DGrid defendPanel;                          // grids for 
+    AGrid attackPanel;                          // player 1 & 2
     
     JPanel lowerPanel;
     JPanel connPanel;
     JButton connectButton;
     JLabel status;
     
-    ConnectDialog cd;
+    ConnectDialog cd;                           // dialog box to serve/join game
     
     JPanel messagePanel;
     JPanel sndMsgPanel, rcvMsgPanel;
     JPanel sendPanel;
     JLabel sent, received;
     JScrollPane outPane, inPane;
-    JTextArea textOut, textIn;  // read only
+    JTextArea textOut, textIn;                  // read only areas
     JTextField toSend;
     JButton sendButton;
     Color gray, ocean;
     Border green, red;
     
-    private int xCoord;
-    private int yCoord;
+    private int xCoord;                         // coordinates
+    private int yCoord;                         // of shot fired
     
-    public Ship[] fleet;
+    private Ship[] fleet;
     
-    public int port = 1776;
-    public String addr;
-    public InetAddress host;
+    private int port = 1776;
+    private String addr;
+    private InetAddress host;
     
+    private Receiver msgReceiver;
+    private ObjectOutputStream outstr;
     
-    Receiver msgReceiver;
-    ObjectOutputStream outstr;
+    private boolean done = false;
     
-    //boolean connected = false;
-    
-    boolean done = false;
-    
-    short myRoll, theirRoll;
-    boolean whosTurn = THEIRS;
-    boolean shotResult = MISS;
-    short hitCount;
+    private short myRoll, theirRoll;            // to decide who's first
+    private boolean whosTurn = THEIRS;
+    private boolean shotResult;
+    private short hitCount;
     
     public GameFrame() {
         setTitle("Battleships");
@@ -78,7 +73,7 @@ class GameFrame extends JFrame {
         
         fleet = new Ship[11];
         
-        // menus
+        // Menus
         menuBar = new JMenuBar();
         setJMenuBar(menuBar);
         
@@ -121,7 +116,7 @@ class GameFrame extends JFrame {
             
         menuBar.add(gameMenu);
         
-        // north panel to keep track of game state
+        // NORTH panel to keep track of game state
         gamePanel = new JPanel();
         gamePanel.setLayout(new GridLayout(1,2));
         
@@ -133,13 +128,12 @@ class GameFrame extends JFrame {
         
         add(gamePanel, BorderLayout.CENTER);
         
-        
         lowerPanel = new JPanel();
         lowerPanel.setLayout(new BorderLayout());
         
         add(lowerPanel, BorderLayout.SOUTH);
         
-        // center panel to connect/disconnect
+        // CENTER panel to connect/disconnect
         connPanel = new JPanel();
         connPanel.setBorder(red);
         
@@ -151,12 +145,11 @@ class GameFrame extends JFrame {
         connPanel.add(status);
         lowerPanel.add(connPanel, BorderLayout.NORTH);
         
-        // south panel for messaging
+        // SOUTH panel for messaging
         messagePanel = new JPanel();
         messagePanel.setBorder(BorderFactory.createLineBorder(gray, 7));
         messagePanel.setLayout(new GridLayout(1,2));
         
-        // 
         sndMsgPanel = new JPanel();
         rcvMsgPanel = new JPanel();
         sendPanel = new JPanel();
@@ -166,13 +159,11 @@ class GameFrame extends JFrame {
         textOut = new JTextArea(5,30);
           textOut.setEditable(false);
         
-          
         outPane = new JScrollPane(textOut);
         outPane.setBorder(BorderFactory.createLineBorder(gray, 5));
         
-                    // check scrollpane behavior in client and server
+                    // how to fix scrollpane behavior?
                     
-        
         textIn = new JTextArea(6,30);
           textIn.setEditable(false);
           
@@ -227,7 +218,7 @@ class GameFrame extends JFrame {
             public void actionPerformed(ActionEvent evt) {
                 try {
                     outstr.writeObject( new Message("c", toSend.getText() + "\n") );
-                    textOut.append("\"" + toSend.getText() + "\"\n");
+                    textOut.append(toSend.getText() + "\n");
                 } 
                 catch(Exception exc) { textIn.append(exc.toString()); }
                 
@@ -236,103 +227,6 @@ class GameFrame extends JFrame {
         });
     }
     
-    
-    // grid classes
-    class GridPanel extends JPanel {        // in order to get coordinates from click
-        int r, c;                           // each panel has a row & column #
-        
-        GridPanel(int r, int c) {
-            super();
-            this.r = r;
-            this.c = c;
-        }
-    }
-    
-     // One grid, which is then extended for defend and attack grids
-    class GameGrid extends JPanel {
-        GridPanel[][] grid = new GridPanel[25][25];
-        Border border;
-        
-        GameGrid(Color clr) {
-            setSize(520, 520);
-            setLayout(new GridLayout(26,26));
-            JLabel label;
-            border = BorderFactory.createLineBorder(Color.LIGHT_GRAY, 1);
-
-            // panels in the grid
-            for(int i=0; i<25; i++) {
-                // add a label first before each row of the grid
-                Integer num = 25 - i;
-                String s = num.toString();
-                label = new JLabel(s);
-                label.setHorizontalAlignment(JLabel.CENTER);
-                add(label);
-                
-                // panels for each row
-                for(int j=0; j<25; j++) {
-                    grid[i][j] = new GridPanel(i,j);
-                    grid[i][j].setBackground(clr);
-                    grid[i][j].setBorder(border);
-                    add(grid[i][j]);
-                }
-            }
-            
-            // bottom left corner with blank label
-            add( new JLabel("") );
-
-            // bottom row of labels
-            for(int j=0; j<25; j++) {
-                char c[] = new char[1];
-                c[0] = (char) (j+65);
-                label = new JLabel(  new String(c)  );
-                label.setHorizontalAlignment(JLabel.CENTER);
-                add(label);
-            }
-        }
-    }
-    
-     // player 1 (defending) grid for defending ships
-    class DGrid extends GameGrid {          
-        
-        DGrid(Color c) {
-            super(c);
-        }
-    }
-    
-     // player 2 (attacking) grid to keep track of shots fired
-    class AGrid extends GameGrid implements MouseListener {
-        
-        AGrid(Color c) {
-            super(c);
-            for(int i=0; i<25; i++)
-                for(int j=0; j<25; j++)
-                    grid[i][j].addMouseListener(this);
-        }
-        
-        @Override
-        public void mouseClicked(MouseEvent evt) {
-            if(whosTurn == MINE) {
-                GridPanel temp = (GridPanel) evt.getComponent();
-                yCoord = temp.r;
-                xCoord = temp.c;
-                
-                // send shoot message
-                try {       
-                    outstr.writeObject( new Message("s",yCoord, xCoord) );
-                } 
-                catch(Exception exc) { textIn.append(exc.toString()); }
-                
-                // switch to other player's turn
-                whosTurn = THEIRS;
-                connPanel.setBorder(red);
-            }
-        }
-        
-        public void mousePressed(MouseEvent me) { }
-        public void mouseReleased(MouseEvent me) { }
-        public void mouseEntered(MouseEvent me) { }
-        public void mouseExited(MouseEvent me) { }
-    }
     
      // Dialog box to serve/join a game
     class ConnectDialog extends JDialog {
@@ -375,6 +269,105 @@ class GameFrame extends JFrame {
         }
     }
     
+    
+    // grid classes
+    class GridPanel extends JPanel {        // in order to get coordinates from click
+        int r, c;                           // each panel has a row & column #
+        
+        GridPanel(int r, int c) {
+            super();
+            this.r = r;
+            this.c = c;
+        }
+    }
+    
+     // One grid, which is then extended for defend and attack grids
+    class GameGrid extends JPanel {
+        GridPanel[][] grid = new GridPanel[20][20];
+        Border border;
+        
+        GameGrid(Color clr) {
+            setSize(520, 520);
+            setLayout(new GridLayout(21,21));
+            JLabel label;
+            border = BorderFactory.createLineBorder(Color.LIGHT_GRAY, 1);
+
+            // panels in the grid
+            for(int i=0; i<20; i++) {
+                // add a label first before each row of the grid
+                Integer num = 20 - i;
+                String s = num.toString();
+                label = new JLabel(s);
+                label.setHorizontalAlignment(JLabel.CENTER);
+                add(label);
+                
+                // panels for each row
+                for(int j=0; j<20; j++) {
+                    grid[i][j] = new GridPanel(i,j);
+                    grid[i][j].setBackground(clr);
+                    grid[i][j].setBorder(border);
+                    add(grid[i][j]);
+                }
+            }
+            
+            // bottom left corner with blank label
+            add( new JLabel("") );
+
+            // bottom row of labels
+            for(int j=0; j<20; j++) {
+                char c[] = new char[1];
+                c[0] = (char) (j+65);
+                label = new JLabel(  new String(c)  );
+                label.setHorizontalAlignment(JLabel.CENTER);
+                add(label);
+            }
+        }
+    }
+    
+     // player 1 (defending) grid for defending ships
+    class DGrid extends GameGrid {          
+        
+        DGrid(Color c) {
+            super(c);
+        }
+    }
+    
+     // player 2 (attacking) grid to keep track of shots fired
+    class AGrid extends GameGrid implements MouseListener {
+        
+        AGrid(Color c) {
+            super(c);
+            for(int i=0; i<20; i++)
+                for(int j=0; j<20; j++)
+                    grid[i][j].addMouseListener(this);
+        }
+        
+        @Override
+        public void mouseClicked(MouseEvent evt) {
+            if(whosTurn == MINE) {
+                GridPanel temp = (GridPanel) evt.getComponent();
+                yCoord = temp.r;
+                xCoord = temp.c;
+                
+                // send shoot message
+                try {       
+                    outstr.writeObject( new Message("s",yCoord, xCoord) );
+                } 
+                catch(Exception exc) { textIn.append(exc.toString()); }
+                
+                // switch to other player's turn
+                whosTurn = THEIRS;
+                connPanel.setBorder(red);
+            }
+        }
+        
+        public void mousePressed(MouseEvent me) { }
+        public void mouseReleased(MouseEvent me) { }
+        public void mouseEntered(MouseEvent me) { }
+        public void mouseExited(MouseEvent me) { }
+    }
+    
+    
      // Networking (no sender thread, only receiver thread)
     class Receiver implements Runnable {
         Thread rcvThr;
@@ -385,7 +378,6 @@ class GameFrame extends JFrame {
         Receiver(Socket s) {
             socket = s;
             rcvThr = new Thread(this);
-            textIn.append("   creating comm thread\n");
             rcvThr.start();
         }
         
@@ -396,8 +388,7 @@ class GameFrame extends JFrame {
                 outstr = new ObjectOutputStream(socket.getOutputStream());
                 instr = new ObjectInputStream(socket.getInputStream());
                 
-                textIn.append("   input and output streams created\n");
-                
+                // Handle the various kinds of messages
                 while(!done) {
                     msg = (Message) instr.readObject();           // get message
                     switch(msg.type) {
@@ -452,13 +443,13 @@ class GameFrame extends JFrame {
                             break;
                     }
                 }
-                textIn.append("   stopping communication / closing socket\n");
+                textIn.append("   Closing connection...");
                 
                 instr.close();
                 outstr.close();
                 socket.close();
                 
-                textIn.append("   socket closed\n");
+                textIn.append("connection closed\n");
                 
             } catch(IOException exc) { 
                 System.out.println("i/o error - host disconnected"); 
@@ -466,12 +457,13 @@ class GameFrame extends JFrame {
                 System.out.println("invalid object type");
             } 
             finally {
-                resetGame();
+                resetGame();                    // clean up for next game
             }
             
         }
     }
     
+    // Create socket connection for server
     public void Server() {
         ServerSocket server;
         Socket conn;
@@ -502,11 +494,13 @@ class GameFrame extends JFrame {
             status.setText("socket error - couldn't connect to server\n");
         } catch (IOException exc) {
             status.setText("I/O error\n");
-        } catch (Exception exc) {
-            exc.printStackTrace();
-        }
+        } 
+//        catch (Exception exc) {
+//            exc.printStackTrace();
+//        }
     }
     
+    // Create socket connection for client
     public void Client() {
         Socket conn;
         
@@ -530,21 +524,22 @@ class GameFrame extends JFrame {
             status.setText("socket error - couldn't connect to server\n");
         } catch (IOException exc) {
             status.setText("I/O error\n");
-        } catch (Exception exc) {
-            exc.printStackTrace();
-        }
+        } 
+//        catch (Exception exc) {
+//            exc.printStackTrace();
+//        }
     }
     
     
      // ship methods
     private boolean validPlace(Ship s) {
-        if(s.horiz && s.col <= (25 - s.size)) {
+        if(s.horiz && s.col <= (20 - s.size)) {
            for(int c=0; c<s.size; c++) 
                if(defendPanel.grid[s.row][s.col + c].getBackground().equals(Color.DARK_GRAY))
                    return false;
            return true;
         }
-        else if(!s.horiz && s.row <= (25 - s.size)) {
+        else if(!s.horiz && s.row <= (20 - s.size)) {
             for(int r=0; r<s.size; r++) 
                if(defendPanel.grid[s.row + r][s.col].getBackground().equals(Color.DARK_GRAY))
                    return false;
@@ -582,16 +577,14 @@ class GameFrame extends JFrame {
         }
         
         horiz = (Math.random() < .5);
-        row = (int) (Math.random() * 25);
-        col = (int) (Math.random() * 25);
+        row = (int) (Math.random() * 20);
+        col = (int) (Math.random() * 20);
         
         Ship s = new Ship(type, size, row, col, horiz);
         
         while(!validPlace(s)) {                             // find a valid spot
-            row = (int) (Math.random() * 25);
-            col = (int) (Math.random() * 25);
-            s.row = row;
-            s.col = col;
+            s.row = (int) (Math.random() * 20);
+            s.col = (int) (Math.random() * 20);
         }
         addToBoard(s);
         return s;
@@ -616,8 +609,8 @@ class GameFrame extends JFrame {
     }
     
     private void clearShips() {
-        for(int i=0; i<25; i++) {
-            for(int j=0; j<25; j++) {
+        for(int i=0; i<20; i++) {
+            for(int j=0; j<20; j++) {
                 defendPanel.grid[i][j].setBackground(ocean);
             }
         }
@@ -642,7 +635,7 @@ class GameFrame extends JFrame {
     }
     
     private boolean allSunk()
-    {   return hitCount == 33;  }
+    {   return hitCount == 33;  }               // 33 hits to sink all 11 ships
     
     private void markShot(boolean hitormiss) {
         // mark attack square red if hit, ocean if miss
@@ -661,7 +654,7 @@ class GameFrame extends JFrame {
         short r = (short) ( Math.random() * 20 + 1);
         textIn.append("   You rolled " + r + "\n");
         
-        try {   // send # so other player knows what I rolled
+        try {   // send value so other player knows what I rolled
             outstr.writeObject( new Message("d", r) );
         } 
         catch (Exception exc) {  textIn.append(exc.toString());  }
@@ -686,7 +679,7 @@ class GameFrame extends JFrame {
         }
     }
     
-     // after game is over
+     // After game is over...
     private void resetGame() {
         sendButton.setEnabled(false);
         connectButton.setEnabled(false);
@@ -697,15 +690,16 @@ class GameFrame extends JFrame {
         connPanel.setBorder(red);
         whosTurn = THEIRS;
         myRoll = 0; theirRoll = 0;
+        port++;                             // use different port next game
         
-        // clear hits/misses
-        for(int i=0; i<25; i++) {
-            for(int j=0; j<25; j++) {
+        // clear hits/misses on opponent grid
+        for(int i=0; i<20; i++) {
+            for(int j=0; j<20; j++) {
                 attackPanel.grid[i][j].setBackground(Color.DARK_GRAY);
             }
         }
         
-        clearShips();
+        clearShips();                       // clear ships/hits/sinks on my grid
         
         try { Thread.sleep(200); } 
         catch(InterruptedException e) 
@@ -716,7 +710,7 @@ class GameFrame extends JFrame {
     
 }
 
- // other classes
+ // Other classes
 class Ship {
     String type;        // e.g. submarine
     short size;         // length of ship
@@ -752,7 +746,6 @@ class Message implements Serializable {
         type = t;
         roll = val;
     }
-    
 }
 
 
